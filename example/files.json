@@ -1,0 +1,12 @@
+{
+  "js": [
+    "lib/jquery-1.7.1.js",
+    "lib/backbone.js",
+    "app/app.js",
+  ],
+  "css": [
+    "css/reset.css",
+    "css/header.css",
+    "css/main.css"
+  ]
+}

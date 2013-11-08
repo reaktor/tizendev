@@ -1,0 +1,14 @@
+#This file is bourne shell script that is sourced by fpstest
+
+APPID=6nqks5opL0.ScrollingPerformance #Mandatory
+
+# This function defines what happens in the test case
+# Available functions:
+#   run_xmacro <file>   run an xmacro script
+#   start_fps_log       clear the FPS log to measure only the correct stuff
+testcase() {
+  sleep 2 # wait for application to start
+  run_xmacro goto_tab_3.xmacro
+  start_fps_log
+  run_xmacro scroll_up_and_down.xmacro
+}

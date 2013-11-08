@@ -1,0 +1,7 @@
+#this_is_a_comment._whitespace_is_not_supported_in_comments
+
+#click_on_tab_3
+MotionNotify 670 124
+ButtonPress 1
+ButtonRelease 1
+Delay 0.5 #wait_for_page_to_load

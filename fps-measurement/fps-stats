@@ -1,0 +1,13 @@
+#!/usr/bin/awk -f
+BEGIN { FS = "[ ,]+" }
+/^FRAME: / { sum += data[NR] = $4 }
+END {
+  avg = sum / NR
+  for (i in data) {
+    diff = data[i] - avg
+    sqsum += diff * diff
+  }
+  stddev = sqrt(sqsum / (NR - 1))
+
+  printf "FPS: %.1f ± %.2f (N=%d)\n", avg, stddev, NR
+}
