@@ -1,0 +1,39 @@
+{
+  "name": "tizendev",
+  "private": true,
+  "description": "Tizen web app development tools for grunt",
+  "version": "0.3.0",
+  "homepage": "",
+  "author": {
+    "name": "Reaktor"
+  },
+  "repository": {
+    "type": "git",
+    "url": "gitti:grunt-fulari.git"
+  },
+  "bugs": {
+    "url": ""
+  },
+  "main": "Gruntfile.js",
+  "engines": {
+    "node": ">= 0.8.0"
+  },
+  "dependencies": {
+    "q": "~0.9.4",
+    "baconjs": "~0.6.19",
+    "xml2js": "0.2.8"
+  },
+  "devDependencies": {
+    "grunt-contrib-watch": "~0.5.3",
+    "grunt": "~0.4.1",
+    "grunt-tizen": "~0.1.1",
+    "grunt-contrib-copy": "~0.4.1",
+    "grunt-contrib-jshint": "~0.6.4"
+  },
+  "peerDependencies": {
+    "grunt": "~0.4.1"
+  },
+  "keywords": [
+    "tizen gruntplugin"
+  ]
+}

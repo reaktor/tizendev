@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+import sys
+import math
+import argparse
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+            description="Generate xmacro with sine-motion along one axis.")
+    parser.add_argument('-t', '--tick',
+            help="tick between events in seconds (0.010)",
+            type=float, default=0.010)
+    parser.add_argument('-p', '--periods',
+            help="number of repeats (10.0)", type=float, default=10.0)
+    parser.add_argument('-f', '--freq',
+            help="Frequency (speed) (1.0 Hz)", type=float, default=1.0)
+    parser.add_argument('-a', '--amplitude',
+            help="Peak amplitude of movement (400 px)", type=int, default=400)
+    parser.add_argument('-x', '--axis',
+            help="The axis to vary (x)",
+            type=str, choices=["x","y"], default='y')
+    parser.add_argument('-c', '--center',
+            help="Center coordinate of the varied axis (600 px)",
+            type=int, default=600)
+    parser.add_argument('-o', '--other-axis-coord',
+            help="Coordinate of the constant axis (360 px)",
+            type=int, default=360)
+    parser.add_argument('-s', '--start-at',
+            help="Where to start the movement (max)",
+            type=str, choices={"min", "center_inc", "center_dec", "max"}, default=360)
+    parser.add_argument('-r', '--repeat',
+            help="How many times to repeat the whole thing (1)",
+            type=int, default=1)
+
+    args = parser.parse_args()
+
+    args.phase_shift = 0 # center_inc
+    if args.start_at == "max":
+        args.phase_shift = math.pi/2
+    elif args.start_at == "center_dec":
+        args.phase_shift = math.pi
+    elif args.start_at == "min":
+        args.phase_shift = 3*math.pi/2
+
+    return args
+
+def calculate_coordinates(args, angle):
+    x = args.other_axis_coord
+    y = args.center + round(args.amplitude*math.sin(angle))
+    if args.axis == "x":
+        x, y = y, x
+    return x, y
+
+def frange_inclusive(x, y, jump):
+  while x <= y:
+    yield x
+    x += jump
+
+def generate_macro(args):
+    print "MotionNotify %d %d" % calculate_coordinates(args, 0+args.phase_shift)
+    print "ButtonPress 1"
+
+    radian_increment = 2*math.pi*args.freq*args.tick
+    end_radian = 2*math.pi*args.periods
+    for angle in frange_inclusive(0.0, end_radian, radian_increment):
+        x, y = calculate_coordinates(args, angle + args.phase_shift)
+        print "MotionNotify %d %d" % (x, y)
+        print "Delay %.3f" % args.tick
+
+    print "ButtonRelease 1"
+
+def main():
+    args = parse_arguments()
+
+    print "#generated_with:_" + "_".join(sys.argv)
+    for i in range(args.repeat):
+        generate_macro(args)
+
+main()

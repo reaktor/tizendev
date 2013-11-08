@@ -1,0 +1,254 @@
+#!/bin/bash
+
+set -e
+
+if [ $# != 1 ]; then
+  echo "Usage: $(basename $0) TEST_CASE_FILE|TEST_CASE_DIR"
+  echo "  if directory given, run the .fpstest file inside it"
+  exit 1
+fi
+
+die() {
+  echo "ERROR: $@"
+  exit 1
+}
+
+if [ -d "$1" ]; then
+  if [ $(ls $1/*.fpstest | wc -l) = 1 ]; then
+    TEST_CASE_FILE=$(ls $1/*.fpstest)
+  else
+    die "Found no .fpstest file or more than one .fpstest file from $1"
+  fi
+else
+  TEST_CASE_FILE="$1"
+fi
+
+if [ -z $(which sdb) ]; then
+  die "sdb not found in PATH. Install Tizen SDK and make sure that the sdb tool is in PATH."
+fi
+
+if [ "$(sdb devices | wc -l)" -lt 2 ]; then
+  die "No phone or emulator found"
+fi
+
+canonicalize_path() {
+  ARG_PATH="$(dirname $1)/$(basename $1)"
+  while [ -L "$ARG_PATH" ]; do
+    ARG_PATH=$(readlink "$ARG_PATH")
+  done
+  echo "$ARG_PATH"
+}
+
+run_cmd_on_target() {
+  sdb shell $@ | tr -d '\r' # sdb adds '\r' characters - strip them away
+}
+
+SCRIPT_PATH=$(canonicalize_path "$0")
+FPSLOG_FILE=/tmp/fpslog
+
+TARGET_UNAME_M=$(run_cmd_on_target uname -m)
+if [ "$TARGET_UNAME_M" = "armv7l" ]; then
+  TARGET_ARCH="armv7l"
+elif [ "$TARGET_UNAME_M" = "i686_emulated" ]; then
+  TARGET_ARCH="i586"
+else
+  die "Unknown target architecture: $TARGET_UNAME_M"
+fi
+
+set_root_mode() {
+  if [ ! $(run_cmd_on_target "whoami") = "root" ]; then
+    echo "target not in root mode, setting..."
+    sdb root on
+  fi
+}
+
+reboot_or_die() {
+  REBOOT_PROG="restart"
+  if [ -z $(run_cmd_on_target "which $REBOOT_PROG") ]; then
+    die "Cannot reboot target programmatically, please reboot manually. Quitting..."
+  fi
+  echo -n "Reboot now? [Y/n] "
+  read answer
+  if [ -z "$answer" ] || [ "$answer" = y ] || [ "$answer" = Y ]; then
+    run_cmd_on_target $REBOOT_PROG
+    exit 0
+  else
+    echo "Not rebooting. Cannot continue before reboot, quitting..."
+    exit 0
+  fi
+}
+
+enable_update_mode_on_target() {
+  run_cmd_on_target "which change-booting-mode.sh &> /dev/null && change-booting-mode.sh --update"
+}
+
+check_if_fps_logging_enabled_and_try_to_enable() {
+  FPS_DEBUG_ENVIRONMENT_VARIABLE="ECORE_EVAS_FPS_DEBUG=1"
+  FPS_DEBUG_ENVIRONMENT_FILE="/etc/profile.d/fps-debug.sh"
+
+  WRT_LAUNCHPAD_PID=$(run_cmd_on_target "pidof wrt_launchpad_daemon | head -n 1")
+  [ -n "$WRT_LAUNCHPAD_PID" ] || die "wrt_launchpad_daemon not running on target"
+
+  WRT_LAUNCHPAD_ENVIRONMENT=$(run_cmd_on_target "cat /proc/$WRT_LAUNCHPAD_PID/environ" | tr '\0' '\n')
+  if echo "$WRT_LAUNCHPAD_ENVIRONMENT" | grep -q "$FPS_DEBUG_ENVIRONMENT_VARIABLE"; then
+    return 0 # FPS debugging is enabled
+  else
+    echo "FPS debugging is not enabled, enabling for future reboots..."
+    enable_update_mode_on_target
+    RES=$(run_cmd_on_target "echo 'export $FPS_DEBUG_ENVIRONMENT_VARIABLE' > '$FPS_DEBUG_ENVIRONMENT_FILE' && chmod 755 '$FPS_DEBUG_ENVIRONMENT_FILE' && echo success")
+    [ "$RES" = success ] || die "Unable to enable FPS debugging: $RES"
+    echo "The target must be rebooted to enable FPS debugging. Run this script again after reboot."
+    reboot_or_die
+  fi
+}
+
+check_if_package_installed_and_try_to_install() {
+  BINARY_TO_PROBE="$1"
+  PACKAGE_NAME_VERSION="$2"
+
+  if [ -z $(run_cmd_on_target "which $BINARY_TO_PROBE") ]; then
+    RPM_PACKAGE="$PACKAGE_NAME_VERSION.$TARGET_ARCH.rpm"
+    show_package_installation_instructions_and_die() {
+      echo " 1) sdb root on; sdb shell 'change-booting-mode.sh --update'"
+      echo " 2) sdb push $RPM_PACKAGE /tmp"
+      echo " 3) sdb shell 'rpm -Uvh /tmp/$RPM_PACKAGE'"
+      exit 1
+    }
+
+    RPM_PACKAGE_PATH="$(dirname $SCRIPT_PATH)/rpms/$RPM_PACKAGE"
+    if [ -r "$RPM_PACKAGE_PATH" ]; then
+      echo "$BINARY_TO_PROBE not found in target, trying to install..."
+      sdb push "$RPM_PACKAGE_PATH" /tmp
+      enable_update_mode_on_target
+      run_cmd_on_target "rpm -Uvh /tmp/$RPM_PACKAGE"
+      if [ -n $(run_cmd_on_target "which $BINARY_TO_PROBE") ]; then
+        echo "$PACKAGE_NAME_VERSION installation succesful"
+      else
+        echo "$PACKAGE_NAME_VERSION installation failed, install manually:"
+        show_package_installation_instructions_and_die
+      fi
+    else
+      echo "$PACKAGE_NAME_VERSION not found in target or $RPM_PACKAGE_PATH, install manually:"
+      show_package_installation_instructions_and_die
+    fi
+  fi
+}
+
+read_test_case_file() {
+  if ! [ -r "$TEST_CASE_FILE" ]; then
+    die "Cannot read $TEST_CASE_FILE"
+  fi
+  echo "Reading test case from $TEST_CASE_FILE..."
+  . "$(dirname $TEST_CASE_FILE)/$(basename $TEST_CASE_FILE)"
+  [ -z "$APPID" ] && die "APPID not specified in $TEST_CASE_FILE"
+  [ $(type -t testcase) != "function" ] \
+    && die "testcase function not specified in $TEST_CASE_FILE"
+  echo "Test case file read"
+}
+
+
+run_xmacro() {
+  MACRO_FILE="$1"
+
+  echo -n "Running macro ${MACRO_FILE}..."
+  PATH_TO_MACRO_FILE="$(dirname $TEST_CASE_FILE)/$MACRO_FILE"
+  sdb push "$PATH_TO_MACRO_FILE" /tmp &> /dev/null
+  run_cmd_on_target "xmacroplay :0 < '/tmp/$(basename $MACRO_FILE)' &> /dev/null"
+  run_cmd_on_target "rm '/tmp/$(basename $MACRO_FILE)'"
+  echo "done"
+}
+start_fps_log() {
+  echo "Starting FPS measurement"
+  initialize_fps_log_file
+}
+initialize_fps_log_file() {
+  run_cmd_on_target "true > '$FPSLOG_FILE'" # truncate
+  run_cmd_on_target "chown app: $FPSLOG_FILE"
+  run_cmd_on_target "chmod 644 $FPSLOG_FILE"
+}
+
+kill_application() {
+  echo "Killing app..."
+  run_cmd_on_target "wrt-launcher --kill '$APPID' 2>&1 > /dev/null"
+  sleep 0.5
+  killall "$APPID" &> /dev/null || true
+  sleep 1.5 # killing is asynchronous, wait a little...
+}
+
+launch_application_and_grab_stdout() {
+  echo "Launching app..."
+  run_cmd_on_target "wrt-launcher --start $APPID"
+  redirect_fps_output_to_file
+}
+redirect_fps_output_to_file() {
+  initialize_fps_log_file
+
+  GDB_SCRIPT_PATH="/tmp/redirect_stdout_to_file.gdb"
+  create_gdb_script "$GDB_SCRIPT_PATH"
+
+  RETRIES=10
+  for retry in $(eval echo {1..$RETRIES}); do
+    APP_PID=$(run_cmd_on_target "pidof $APPID" | head -n 1)
+    if [ -n "$APP_PID" ]; then
+      break
+    fi
+    if [ $retry == $RETRIES ]; then
+      die "could not attach to process"
+    else
+      echo "app not found, retrying ($retry/$RETRIES)..."
+    fi
+    sleep 0.5
+  done
+  run_cmd_on_target "gdb -p $APP_PID -x '$GDB_SCRIPT_PATH'" > /dev/null
+}
+create_gdb_script() {
+  sdb shell "cat > $GDB_SCRIPT_PATH <<END_OF_GDB_SCRIPT
+call dup2(open(\"/tmp/fpslog\", 01101), 1)
+detach
+quit
+END_OF_GDB_SCRIPT
+"
+}
+
+show_fps_stats() {
+  rm -f "$FPSLOG_FILE" 2>&1 > /dev/null
+  run_cmd_on_target "grep -a 'FPS:' '$FPSLOG_FILE'" > "$FPSLOG_FILE"
+  [ -s "$FPSLOG_FILE" ] || die "Could not retrieve FPS log from target or testcase too short"
+
+  # Remove two first and two last lines from log - they're inaccurate
+  FPSLOG_LINE_COUNT=$(wc -l < "$FPSLOG_FILE")
+  sed -n "2,$(( $FPSLOG_LINE_COUNT - 2 ))p" < "${FPSLOG_FILE}" > "${FPSLOG_FILE}.2"
+  mv "${FPSLOG_FILE}.2" "$FPSLOG_FILE"
+  awk '
+  BEGIN { FS = "[ ,]+" }
+  /^FRAME: / { sum += data[NR] = $4 }
+  END {
+    avg = sum / NR
+    for (i in data) {
+      diff = data[i] - avg
+      sqsum += diff * diff
+    }
+    stddev = sqrt(sqsum / (NR - 1))
+
+    printf "FPS: %.1f ± %.2f (N=%d)\n", avg, stddev, NR
+  }' "$FPSLOG_FILE"
+}
+
+run_testcase() {
+  echo "Running testcase..."
+  testcase
+}
+
+set_root_mode
+check_if_fps_logging_enabled_and_try_to_enable
+check_if_package_installed_and_try_to_install xmacroplay xmacro-pre0.3_reaktor-1
+check_if_package_installed_and_try_to_install gdb gdb-7.2-2.1
+read_test_case_file
+
+kill_application
+
+launch_application_and_grab_stdout
+run_testcase
+show_fps_stats
+
+kill_application
