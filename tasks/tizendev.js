@@ -30,7 +30,8 @@ module.exports = function(grunt) {
     profilingTimes: 1, // number of profiling attempts
     profilingSleep: 5, // seconds between profiling rounds
     nativePath: "", // native project that should be linked to a hybrid app
-    liveReload: true // enable livereload server when in debug mode
+    liveReload: true, // enable livereload server when in debug mode
+    tizenAppScriptDir: "/" //Folder where grunt-tizen dependency puts its' helper script tizen-app.sh
   };
 
   function getConfig() {
@@ -81,7 +82,7 @@ module.exports = function(grunt) {
   grunt.registerTask("tizendev", function(cmd) {
     grunt.config("tizendev", getConfig());
     grunt.config.set("tizen_configuration.configFile", path.join(getConfig().sourceDir, "config.xml"));
-
+    grunt.config.set("tizen_configuration.tizenAppScriptDir", getConfig().tizenAppScriptDir);
     if (!cmd) {
       grunt.fail.warn("Tizendev task parameter not specified. Possible options: " + Object.keys(tasks).join(", ") + "\n");
     }
