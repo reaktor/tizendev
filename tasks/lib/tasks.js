@@ -86,8 +86,8 @@ module.exports = function(grunt) {
     },
 
     package: function() {
-      removeWgtFile();
-      return shell.package(getWgtName(), getConfig().buildPath);
+      var app = getAppTypeSpecificTasks();
+      return app.package();
     },
 
     install: function() {

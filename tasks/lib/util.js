@@ -3,6 +3,8 @@ var fs = require("fs");
 var path = require("path");
 var http = require("http");
 var url = require("url");
+var java = require("java");
+var libxmljs = require("libxmljs");
 
 module.exports = function(grunt) {
   "use strict";
@@ -120,18 +122,43 @@ module.exports = function(grunt) {
       return fs.readdirSync(dir).length === 0;
     },
 
-    getAppId: function(configXmlPath) {
-      var configXml = grunt.file.read(configXmlPath);
-      var regexp = new RegExp("<tizen:application[^>]*?id=['\"](.*?)['\"]","i");
-      var matches = regexp.exec(configXml);
-      if (matches.length > 0) {
-        var appId =  matches[1];
-        if (appId.indexOf(".") < 0)
-          grunt.fail.fatal("AppId is in unsupported format: " + appId);
-        return appId;
+    getAppId: function(configurationXmlPath) {
+        console.log(configurationXmlPath);
+        if(this.existingPath(configurationXmlPath, "config.xml")){
+            return getWebAppId(path.join(configurationXmlPath, "config.xml"))
+        }else if(this.existingPath(configurationXmlPath, "manifest.xml")){
+            return getNativeAppId(path.join(configurationXmlPath, "manifest.xml"))
+        }
+        else{
+            grunt.fail.warn("Tizendev should be run in a folder with either config.xml or manifest.xml");
+        }
+    },
+
+    getProfileData: function(profileName, profileXmlPath, libPath) {
+        var profileXml = grunt.file.read(profileXmlPath);
+        return parseProfileData(profileName, profileXml, libPath)
+    },
+
+    getSigningProfileName: function (profilesXmlPath, profileName) {
+      var deferred = Q.defer();
+      var parse = require('xml2js').parseString;
+
+      if (profileName) {
+        deferred.resolve(profileName);
       } else {
-        grunt.fail.warn("application id not found in config.xml");
+        parse(grunt.file.read(profilesXmlPath), {attrkey: "attr"}, function (err, result) {
+          if (err)
+            deferred.reject("Can't parse " + profilesXmlPath);
+          else {
+            try {
+              deferred.resolve(_.first(result.profiles.profile).attr.name);
+            } catch (e) {
+              deferred.reject("Can't find profile in " + profilesXmlPath);
+            }
+          }
+        });
       }
+      return deferred.promise;
     },
 
     applyGruntTemplate: function(array) {
@@ -194,4 +221,62 @@ module.exports = function(grunt) {
   };
 
   return util;
+
+  function parseProfileData(profileName, xml, libPath){
+      var xmlDoc = libxmljs.parseXmlString(xml);
+      var profile = xmlDoc.get("/profiles/profile[@name='" + profileName + "'][1]");
+      var authorItem = profile.get("//profileitem[@distributor='0'][1]");
+      var distributorItem = profile.get("//profileitem[@distributor='1'][1]");
+
+      return {
+          authorKeyPassword : decryptProfilePassword(authorItem.attr("password").value(), libPath),
+          authorKeyPath: authorItem.attr("key").value(),
+          distributorPassword: decryptProfilePassword(distributorItem.attr("password").value(), libPath),
+          distributorKeyPath: distributorItem.attr("key").value()
+      };
+  }
+
+
+  function decryptProfilePassword(password, libPath){
+      var files = fs.readdirSync(libPath);
+      var javaLibs = _.filter(files, function(fileName){
+          return fileName.slice(-4) == ".jar"
+      });
+      _.each(javaLibs, function(jar){
+          var filePath = path.join(libPath, jar);
+          java.classpath.push(filePath);
+
+      });
+
+      var decryptedPassword = java.callStaticMethodSync("org.tizen.common.util.CipherUtil", "getDecryptedString", password);
+      return decryptedPassword;
+  }
+
+
+
+  function getWebAppId(configXmlPath) {
+      var configXml = grunt.file.read(configXmlPath);
+      var regexp = new RegExp("<tizen:application[^>]*?id=['\"](.*?)['\"]","i");
+      var matches = regexp.exec(configXml);
+      if (matches.length > 0) {
+          var appId =  matches[1];
+          if (appId.indexOf(".") < 0)
+              grunt.fail.fatal("AppId is in unsupported format: " + appId);
+          return appId;
+      } else {
+          grunt.fail.warn("application id not found in config.xml");
+      }
+  }
+
+  function getNativeAppId(manifestXmlPath) {
+      var manifestXml = grunt.file.read(manifestXmlPath);
+      var xmlDoc = libxmljs.parseXmlString(manifestXml);
+      var nameSpaceUrl = xmlDoc.root().namespace().href();
+      var tizenNameSpace = {tizenNs : nameSpaceUrl};
+      var appId = xmlDoc.get("/tizenNs:Manifest/tizenNs:Id", tizenNameSpace).text();
+      if(!appId){
+          grunt.fail.warn("application id not found in manifest.xml");
+      }
+      return appId;
+  }
 };
