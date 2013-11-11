@@ -9,6 +9,8 @@ module.exports = function(grunt) {
   var util = require("./util.js")(grunt);
   var shell = require("./shell.js")(grunt);
   var profiler = require("./profiling.js")(grunt);
+  var webApp = require("./webapp.js")(grunt);
+  var nativeApp = require("./nativeapp.js")(grunt);
   var _ = grunt.util._;
   var gruntTizenInitialized = false;
 
@@ -36,15 +38,19 @@ module.exports = function(grunt) {
       });
     },
 
-    build: function() {
+    build: function () {
       return tasks.clean()
-        .then(buildNativeAppIfNecessary)
-        .then(buildWidget);
+          .then(function () {
+            var app = getAppTypeSpecificTasks();
+            return app.build(getConfig().sourceDir);
+          })
+          .then(function () {
+            executeAllTasks();
+          });
     },
 
     start: function() {
       var action = grunt.option("debug") ? "debug" : "start";
-
       grunt.config.set("tizen." + action, {
         action: action,
         localPort: 9090,
@@ -202,69 +208,6 @@ module.exports = function(grunt) {
       return Q.defer().promise;
     }
   };
-
-  function buildNativeAppIfNecessary() {
-    var nativeApp = getConfig().nativePath;
-
-    if (nativeApp.length > 0) {
-      if (!util.isAbsolutePath(nativeApp))
-        nativeApp = getProjectFilePath(nativeApp);
-
-      grunt.log.writeln("Linking native application: " + nativeApp);
-      return buildNative().then(function() {
-        return shell.nativeAppToBuildPath(nativeApp, getConfig().buildPath, getProjectFilePath(""));
-      });
-    } else
-      return util.resolvedPromise();
-  }
-
-  function getNativeAppPath() {
-    var nativeApp = getConfig().nativePath;
-
-    if (nativeApp.length > 0) {
-      if (!util.isAbsolutePath(nativeApp))
-        return getProjectFilePath(nativeApp);
-      else
-        return nativeApp;
-    } else {
-      return null;
-    }
-  }
-
-  function buildNative() {
-    var nativeAppPath = getNativeAppPath();
-
-    if (nativeAppPath) {
-
-      if (!fs.existsSync(nativeAppPath))
-        grunt.fail.warn("Path not found: " + nativeAppPath);
-      else {
-        return  shell.generateMakeFile(nativeAppPath)
-          .then(function(){
-            return shell.buildNativeProject(nativeAppPath);
-          });
-      }
-    }
-  }
-
-  function buildWidget() {
-    var config = getConfig();
-    var srcPaths = _.flatten([
-      config.copy,
-      excludeBuildFolderFilter(config),
-      config.copyExclude
-    ]);
-
-    var widgetDirectory = getConfig().nativePath.length > 0 ? path.join(getConfig().buildPath, "/res/wgt") : getConfig().buildPath;
-    console.log("Building widget to directory: " + widgetDirectory);
-
-    grunt.config.set("copy.tizendev.expand", true);
-    grunt.config.set("copy.tizendev.cwd", getProjectFilePath(""));
-    grunt.config.set("copy.tizendev.src", srcPaths);
-    grunt.config.set("copy.tizendev.dest", widgetDirectory);
-    grunt.task.run("copy:tizendev");
-    executeAllTasks();
-  }
 
   function startSdbServer() {
     return shell.startDaemon("sdb", ["start-server"]);
@@ -438,7 +381,30 @@ module.exports = function(grunt) {
     return deferred.promise;
   }
 
-  // SETTINGS
+  function getAppType(rootPath) {
+    if (util.existingPath(rootPath, "config.xml")) {
+      return "WEB"
+    }
+    else if (util.existingPath(rootPath, "manifest.xml")) {
+      return "NATIVE";
+    }
+    else {
+      grunt.fail.warn("Tizendev should be run from folder with either config.xml or manifest.xml");
+    }
+    ;
+  }
+
+  function getAppTypeSpecificTasks() {
+    var sourceDir = getConfig().sourceDir;
+    switch (getAppType(sourceDir)) {
+      case "NATIVE" :
+        return nativeApp
+      default :
+        return webApp;
+    }
+  }
+
+    // SETTINGS
   function getConfig() {
     return grunt.config("tizendev");
   }

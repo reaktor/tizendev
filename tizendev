@@ -11,6 +11,6 @@ RUNDIR=`dirname $BIN`
 cd $RUNDIR
 CMD=$1
 shift
-grunt tizendev:$CMD --sourceDir=$FOLDER --buildPath=$FOLDER/tizendevbuild $@
+grunt tizendev:$CMD --sourceDir=$FOLDER $@
 
 cd $FOLDER

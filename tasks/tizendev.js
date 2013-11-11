@@ -23,7 +23,7 @@ module.exports = function(grunt) {
     profile: "", // the name of the profile used for signing. If empty, profile name is parsed from profiles.xml
     profilePath: "", // location of profiles.xml
     sourceDir: ".", // root folder, ie. folder where config.xml is located
-    buildPath: "tizendevbuild", // build folder, must NOT be project root.
+    buildPath: "CommandLineBuild", // build folder, must NOT be project root.
     fileChanged: undefined, // custom function to execute after file change. Receives file name as argument.
     remoteAppLocation: "/opt/usr/apps/<%=tizendev.appId%>/res/wgt/", // Application directory on tizen device. appId is determined runtime.
     profilingEvents: ["launch request : <%=tizendev.fullAppId%>", "getUri(): default uri", "E_PARSED", "E_LOADED"], // Log events that trigger profiling
