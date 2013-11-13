@@ -93,6 +93,7 @@ module.exports = function(grunt) {
       console.log("Configuration:", config);
       console.log("\nStarting task: " + cmd);
       firstRun = false;
+      tasks.setupWatchers();
     }
 
     var taskFunc = tasks[cmd];

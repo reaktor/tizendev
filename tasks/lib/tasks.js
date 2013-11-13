@@ -140,7 +140,11 @@ module.exports = function(grunt) {
     },
 
     setDate: function() {
-      return shell.sdbDate(new Date());
+      return shell.execSdb(["root", "on"]).then(function() { shell.sdbDate(new Date()); });
+    },
+
+    setupWatchers: function() {
+      return getAppTypeSpecificTasks().setupWatcher(tasks);
     },
 
     console: function() {
@@ -215,107 +219,11 @@ module.exports = function(grunt) {
       return deferred.promise;
   }
 
-  function setupWatcher() {
-    var filesBeforeChange = null;
-
-    grunt.event.on('watch', function(action, filepath, target) {
-      if (target == "tizendev") {
-        filesBeforeChange = util.getModifiedDates(getConfig().buildPath + "/");
-
-        var watchFunc = getConfig().fileChanged;
-        if (watchFunc)
-          watchFunc.apply(this, arguments);
-
-        if (isCopyMatch(filepath))
-          copySrcFileToBuild(filepath);
-
-        executeTasks(filepath);
-        grunt.task.run("transferToPhone");
-        if (getConfig().liveReload) {
-          grunt.task.run("tizendev:refreshBrowser");
-        }
-      }
-    });
-
-    grunt.registerTask("transferToPhone", function() {
-      if (filesBeforeChange) {
-        var filesAfterChange = util.getModifiedDates(getConfig().buildPath + "/");
-        var modifications = util.diffModifiedDates(filesBeforeChange, filesAfterChange);
-
-        if (modifications.added.length > 0 || modifications.modified.length > 0) {
-          var async = this.async();
-          transferToPhone(modifications)
-            .then(tasks.restart)
-            .fail(function(error) {
-              grunt.fail.warn(error);
-            })
-            .done(async);
-        }
-      }
-    });
-  }
-
-  function isCopyMatch(filepath) {
-    var sourceRelativePath = path.relative(getConfig().sourceDir, filepath);
-    var filter = _.flatten([getConfig().copy, getConfig().copyExclude]);
-    return grunt.file.match(filter, sourceRelativePath).length > 0;
-  }
-
-  function executeTasks(filepath) {
-    var sourceRelativePath = path.relative(getConfig().sourceDir, filepath);
-    var tasks = getConfig().tasks;
-    for (var taskName in tasks) {
-      if (grunt.file.match(tasks[taskName], sourceRelativePath).length > 0)
-        grunt.task.run(taskName);
-    }
-  }
-
   function executeAllTasks() {
     var tasks = getConfig().tasks;
     for (var taskName in tasks) {
       grunt.task.run(taskName);
     }
-  }
-
-  function copySrcFileToBuild(sourcePath) {
-    var sourceFileRelativePath = path.relative(getConfig().sourceDir, sourcePath);
-    var targetPath = path.join(getConfig().buildPath, sourceFileRelativePath);
-    grunt.file.copy(sourcePath, targetPath);
-    grunt.log.writeln("Copied " + sourcePath + " to " + targetPath);
-  }
-
-  function transferToPhone(modifications) {
-    var changedFiles = _.flatten([modifications.added, modifications.modified]);
-    var targetAppPath = grunt.template.process(getConfig().remoteAppLocation, {data: getConfig()});
-    var deferred = Q.defer();
-
-    var transfer = function(files) {
-      if (files.length === 0)
-        deferred.resolve();
-      else {
-        var filepath = files.shift();
-        var relativePath = path.relative(getConfig().buildPath, filepath);
-        var targetPath = path.join(targetAppPath, relativePath);
-
-        shell.spawn({
-          cmd: "sdb",
-          args: ["push", filepath, targetPath]
-        }, function(error, output) {
-          if (error)
-            deferred.reject(error);
-          else {
-            grunt.log.writeln(output);
-            transfer(files);
-          }
-        });
-      }
-    };
-
-    shell.execSdb(["root", "on"]).then(function() {
-      transfer(changedFiles);
-    });
-
-    return deferred.promise;
   }
 
   function getAppType(rootPath) {
@@ -353,8 +261,6 @@ module.exports = function(grunt) {
   function excludeBuildFolderFilter(config) {
     return "!" + path.join(path.relative(config.sourceDir, config.buildPath), "/**");
   }
-
-  setupWatcher();
 
   return tasks;
 };

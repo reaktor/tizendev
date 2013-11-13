@@ -65,6 +65,41 @@ module.exports = function (grunt) {
         });
       }
       return shell.sdbKill(getConfig().fullAppId).then(waitForStop);
+    },
+
+    setupWatcher: function (tasks) {
+      var filesBeforeChange = null;
+
+      grunt.event.on('watch', function (action, filepath, target) {
+        filesBeforeChange = util.getModifiedDates(getConfig().buildPath + "/");
+
+        var watchFunc = getConfig().fileChanged;
+        if (watchFunc)
+          watchFunc.apply(this, arguments);
+
+        if (isCopyMatch(filepath))
+          copySrcFileToBuild(filepath);
+
+        executeTasks(filepath);
+        grunt.task.run("transferToPhone");
+      });
+
+      grunt.registerTask("transferToPhone", function () {
+        if (filesBeforeChange) {
+          var filesAfterChange = util.getModifiedDates(getConfig().buildPath + "/");
+          var modifications = util.diffModifiedDates(filesBeforeChange, filesAfterChange);
+
+          if (modifications.added.length > 0 || modifications.modified.length > 0) {
+            var async = this.async();
+            transferToPhone(modifications)
+                .then(tasks.restart)
+                .fail(function (error) {
+                  grunt.fail.warn(error);
+                })
+                .done(async);
+          }
+        }
+      });
     }
 
   };
@@ -156,6 +191,40 @@ module.exports = function (grunt) {
     var targetPath = path.join(getConfig().buildPath, sourceFileRelativePath);
     grunt.file.copy(sourcePath, targetPath);
     grunt.log.writeln("Copied " + sourcePath + " to " + targetPath);
+  }
+
+  function transferToPhone(modifications) {
+    var changedFiles = _.flatten([modifications.added, modifications.modified]);
+    var targetAppPath = grunt.template.process(getConfig().remoteAppLocation, {data: getConfig()});
+    var deferred = Q.defer();
+
+    var transfer = function(files) {
+      if (files.length === 0)
+        deferred.resolve();
+      else {
+        var filepath = files.shift();
+        var relativePath = path.relative(getConfig().buildPath, filepath);
+        var targetPath = path.join(targetAppPath, relativePath);
+
+        shell.spawn({
+          cmd: "sdb",
+          args: ["push", filepath, targetPath]
+        }, function(error, output) {
+          if (error)
+            deferred.reject(error);
+          else {
+            grunt.log.writeln(output);
+            transfer(files);
+          }
+        });
+      }
+    };
+
+    shell.execSdb(["root", "on"]).then(function() {
+      transfer(changedFiles);
+    });
+
+    return deferred.promise;
   }
 
   return webApp;

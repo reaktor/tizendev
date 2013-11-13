@@ -8,10 +8,6 @@ module.exports = function (grunt) {
   var util = require("./util.js")(grunt);
   var shell = require("./shell.js")(grunt);
 
-  function getBinPath(cmd) {
-    return path.join(grunt.config("tizendev").binPath, cmd);
-  }
-
   function getConfig() {
     return grunt.config("tizendev");
   }
@@ -63,6 +59,20 @@ module.exports = function (grunt) {
 
     stop: function () {
       return shell.nativeStop(getConfig().fullAppId);
+    },
+
+    setupWatcher: function () {
+
+      grunt.event.on('watch', function (action, filepath, target) {
+        grunt.task.run("tizendev:stop");
+        grunt.task.run("tizendev:build");
+        grunt.task.run("tizendev:package");
+        grunt.task.run("tizendev:uninstall");
+        grunt.task.run("tizendev:install");
+        grunt.task.run("tizendev:start");
+
+      });
+      return util.resolvedPromise();
     }
 
   };
