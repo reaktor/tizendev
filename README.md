@@ -4,10 +4,10 @@
  
  Tizendev consists of two separate and independent tool collections: 
  1. tizendev
-    * Build, deploy and run Tizen Web Apps
-    * Profile Tizen Web Apps
-    * Watch changes
-    * Debug
+    * Build, deploy and run Tizen Apps (Web, Hybrid and Native)
+    * Profile (Web)
+    * Watch changes (Web, Hybrid (only for web part)  and Native)
+    * Debug  (Web)
  2. FPS Measurement Tools (fps-measurement/)
     * Measure FPS of Tizen Web App
  
@@ -17,10 +17,12 @@ Before you try to use Tizendev plugin, make sure to install the latest version o
 
 If you haven't used [Grunt](http://gruntjs.com/) before, be sure to check out the [Getting Started](http://gruntjs.com/getting-started) guide, as it explains how to create a [Gruntfile](http://gruntjs.com/sample-gruntfile) as well as install and use Grunt plugins. 
 
-## Getting Started
-Tizendev makes it easier to build, run, install and debug Tizen Web Apps from command line. 
+The [tizen-sdk](https://developer.tizen.org/downloads/tizen-sdk) installation is also required. Tizendev uses the commandline tools provided by the sdk and the signing profile configurations created by the IDE.
 
-**Note that hybrid or native applications are not currently supported.**
+## Getting Started
+Tizendev makes it easier to build, run, install and debug Tizen Apps from command line.
+
+First you have to create your signing profile using Tizen-IDE so that the "~/workspace/.metadata/.plugins/org.tizen.common.sign/profiles.xml" gets created.
 
 There are two ways to use the plugin:
 
@@ -36,7 +38,7 @@ If you don't want to install the plugin for every application you develop, you c
 
 Clone the repository, and run `npm install` in that directory.
 
-Then edit the default settings in Gruntfile.js. At least, configure signing options: the name of profile specified in profiles.xml and optionally the name of profile in profiles.xml. The settings should be the same you have configured in Eclipse.
+Then edit the default settings in Gruntfile.js. At least, configure signing options: the name of profile specified in profiles.xml and optionally the name of profile in profiles.xml. The settings should be the same you have configured in Tizen-IDE.
 
 ```js
     tizendev: {
@@ -49,7 +51,7 @@ Then edit the default settings in Gruntfile.js. At least, configure signing opti
 
 Remember to add the cloned repository to system path so that `tizendev` shell script can be run from any project folder.
 
-To build and run Tizen Web Apps, go to a project directory (directory containing config.xml) and execute the `tizendev` shell script. The script will launch Grunt and configure the plugin to use the current working directory.
+To build and run Tizen  apps, go to a project directory (directory containing config.xml or manifest.xml) and execute the `tizendev` shell script. The script will launch Grunt and configure the plugin to use the current working directory.
 
 ```
 cd ~/projectDirectory
@@ -126,26 +128,29 @@ grunt.initConfig({
 These default options can be set in `Gruntfile.js`. Any string, number or array setting can also be overriden by specifying it as an argument to Tizendev script or Grunt.
 
 ```js
-  tizenDev: {
-    watch: ["**", "!node_modules/**"], // Files that trigger tizendev tasks. Should include all files that are monitored by copy and task filters. Build path is excluded automatically.
-    watchExclude: [], // This is appended to watch - useful for excluding files in project's gruntfile
-    copy: ["**", "!node_modules/**", "!*.wgt"], // What files to copy to build folder (and sync to phone).
-    copyExclude: [], // This is appended to copy - useful for excluding files in project's gruntfile
-    tasks: {}, // tasks to run after file change. for example: tasks: { "uglify": ["js/*.js", "otherfolder/**/*.js"] }
-    binPath: "~/tizen-sdk/tools/ide/bin/", // location of CLI tools
-    profile: "", // the name of the profile used for signing
-    nativeTarget: "armel", //specify an architecture ("armel" | "i386")
-    profile: "", // the name of the profile used for signing. If empty, profile name is parsed from profiles.xml
-    profilePath: "", // location of profiles.xml
-    sourceDir: ".", // root folder, ie. folder where config.xml is located
-    buildPath: "tizendevbuild", // build folder, must NOT be project root.
-    fileChanged: undefined, // custom function to execute after file change. Receives file name as argument.
-    remoteAppLocation: "/opt/usr/apps/<%=tizendev.appId%>/res/wgt/", // Application directory on tizen device. appId is determined runtime.
-    profilingEvents: ["launch request : <%=tizendev.fullAppId%>", "getUri(): default uri", "E_PARSED", "E_LOADED"], // Log events that trigger profiling
-    profilingTimes: 1, // number of profiling attempts
-    profilingSleep: 5, // seconds between profiling rounds
-    liveReload: true // enable livereload server when in debug mode
-  };
+  var defaultConfig = {
+      watch: ["**", "!node_modules/**"], // Files that trigger tizendev tasks. Should include all files that are monitored by copy and task filters. Build path is excluded automatically.
+      watchExclude: [], // This is appended to watch - useful for excluding files in project's gruntfile
+      copy: ["**", "!node_modules/**", "!*.wgt"], // What files to copy to build folder (and sync to phone).
+      copyExclude: [], // This is appended to copy - useful for excluding files in project's gruntfile
+      tasks: {}, // tasks to run after file change. for example: tasks: { "uglify": ["js/*.js", "otherfolder/**/*.js"] }
+      sdkPath: "~/tizen-sdk",
+      binPath: "<%=tizendev.sdkPath%>/tools/ide/bin/", // location of CLI tools
+      libPath: "<%=tizendev.sdkPath%>/tools/ide/lib/", // location of CLI java libraries
+      nativeTarget: "armel", //specify an architecture ("armel" | "i386")
+      profile: "", // the name of the profile used for signing. If empty, profile name is parsed from profiles.xml
+      profilePath: "", // location of profiles.xml
+      sourceDir: ".", // root folder, ie. folder where config.xml is located
+      buildPath: "CommandLineBuild", // build folder, must NOT be project root. If developing native project changing this value breaks the build system
+      fileChanged: undefined, // custom function to execute after file change. Receives file name as argument.
+      remoteAppLocation: "/opt/usr/apps/<%=tizendev.appId%>/res/wgt/", // Application directory on tizen device. appId is determined runtime.
+      profilingEvents: ["launch request : <%=tizendev.fullAppId%>", "getUri(): default uri", "E_PARSED", "E_LOADED"], // Log events that trigger profiling
+      profilingTimes: 1, // number of profiling attempts
+      profilingSleep: 5, // seconds between profiling rounds
+      nativePath: "", // native project that should be linked to a hybrid app
+      liveReload: true, // enable livereload server when in debug mode
+      tizenAppScriptDir: "/" //Folder where grunt-tizen dependency puts its' helper script tizen-app.sh
+    };
 ```
 
 ### Sample Gruntfile.js
@@ -192,6 +197,8 @@ module.exports = function(grunt) {
 };
 
 ```
+### Hybrid application
+Use --nativePath=../path to define the location of the native service, which should be linked to the application.
 
 ### Tasks
 
@@ -221,54 +228,72 @@ module.exports = function(grunt) {
 - remove the build directory
 
 #### tizendev:build
+Web:
 
-- run `clean`
+ * run `clean`
 
-- copy files using `copy` filter to the build folder
+ * copy files using `copy` filter to the build folder
 
-- then execute tasks mentioned in `tasks`
+ * then execute tasks mentioned in `tasks`
+
+Hybrid:
+
+ * run `clean`
+ * generates make file for native app and builds the native part
+ * copies the built native part to the web build folder
+ * copy files using `copy` filter to the build folder
+ *  then execute tasks mentioned in `tasks`
 
 #### tizendev:start, stop, restart
 
 - start/stop/restart application
 
 #### tizendev:sign
+- Web/Hybrid:
+ * sign files in build folder (run `build` prior to `sign`)
 
-- sign files in build folder (run `build` prior to `sign`)
+ * `profile` and `profilePath` options must be specified
 
-- `profile` and `profilePath` options must be specified
+ * tizen CLI will not throw error if signing fails!
 
-- tizen CLI will not throw error if signing fails!
+- Native
+ * packaging task handles signing
 
 #### tizendev:package
+- Web/Hybrid
+ * create widget from all files in build folder
 
-- create widget from all files in build folder
+ * widget file is saved to current working directory
 
-- widget file is saved to current working directory
+ * app in build folder must be signed before calling package
 
-- app in build folder must be signed before calling package
+ * previous widget file is removed
 
-- previous widget file is removed
+- Native
+  * signs and creates the .tpk file from the files in CommandLineBuild directory
 
 #### tizendev:install
 
-- install widget file to the target device
+- install widget or .tpk package file to the target device
 
-- uses the widget file created by `package` command
+- uses the widget or .tpk file created by `package` command
 
 #### tizendev:uninstall
 
-- uninstall widget from target device
+- uninstall widget or package from target device
 
 #### tizendev:watch
 
-- watch for changes in files defined by `files` option
+- Web
+ *  watch for changes in files defined by `files` option
+ * if changed file matches `copy` filter, the file is copied
+ * if changed file matches a filter in `tasks`, the task(s) is executed
+ *  finally, all changed files in build directory are transferred to phone and the application is restarted
 
-- if changed file matches `copy` filter, the file is copied
-
-- if changed file matches a filter in `tasks`, the task(s) is executed
-
-- finally, all changed files in build directory are transferred to phone and the application is restarted
+- Native
+ * watch for changes in files defined by `files` option
+ * build application again if file changed
+ * install built version to the phone and start it
 
 #### tizendev:setDate
 
@@ -276,9 +301,14 @@ module.exports = function(grunt) {
 
 #### tizendev:profile
 
-- launch profiler
+- Web/Hybrid
+ * launch profiler
+-Native
+ * Not supported
 
 ### Debugging
+
+- Web/Hybrid
 
 Start the script with `--debug` argument. For example:
 
@@ -290,6 +320,8 @@ Then go to http://localhost:9090/inspector.html?page=1
 
 If you have the LiveReload browser plugin (http://livereload.com) installed, the inspector will be automatically refreshed when files are updated on target device.
 
+- Native
+ * Not supported
 
 ### Profiling
 
@@ -316,6 +348,8 @@ tizendev profile --profilingTimes=5
 You have to run `dlogctrl set platformlog 1` in the emulator's shell to enable enough logging for the profiler. 
 After running the command restart the emulator.
 
+### Emulator and native applications
+Remember to pass the --nativeTarget=i386 option so the application is built with right architecture.
 
 ### Troubleshooting
 Installation may fail for many reasons. The error message will not tell the actual reason. Possible solutions:
@@ -323,9 +357,20 @@ Installation may fail for many reasons. The error message will not tell the actu
 * Installation also fails if the target device's clock is in wrong time.
 * OS X may add .DS_Store file to build directory after signing. This will make installation fail because package contents don't match the signature. Get rid of .DS_Store files in build path.
 * If you try to compile the project in Eclipse, installation may fail if Tizendev build folder's signature files are included in the Eclipse project. The easiest solution is to remove the build folder. You can also set build path to point at some location outside the Eclipse project.
+* If native application doesn't start check that you are using right nativeTarget option.
+* Try running 'sdb root on' and see if that helps.
 
 ## Release History
 _(Nothing yet)_
+
+## Known Issues
+- No support for referencing multiple native services from web app
+- Native apps are built from ground up when files change.
+- Hybrid applications don't watch for changes in native part of the app
+- Packaging native applications throws errors from logger configuration. Doesn't effect the outcome of packaging.
+- tizenAppScriptDir option's default value is "/" which is bad practice and should be fixed. There was permission problems
+with /tmp folder which was the original value.
+
 
 ## License
 ```
