@@ -99,11 +99,17 @@ module.exports = function(grunt) {
     isBuildDirectory: function(rootPath, buildDir) {
       var webAppConfig = this.existingPath(buildDir, "config.xml");
       var hybridAppConfig = this.existingPath(buildDir, "res/wgt/config.xml");
-      var configFile = webAppConfig || hybridAppConfig;
+      var nativeAppConfig = this.existingPath(buildDir, "../manifest.xml");
+
+      if (nativeAppConfig){
+        return true;
+      }
+
+      var configFile = webAppConfig || hybridAppConfig
 
       if (configFile) {
-        var buildAppId = this.getAppId(configFile);
-        var projectAppId = this.getAppId(path.join(rootPath, "config.xml"));
+        var buildAppId = this.getAppId(path.dirname(configFile));
+        var projectAppId = this.getAppId(rootPath);
         return buildAppId === projectAppId;
       } else {
         return false;
