@@ -12,7 +12,6 @@ module.exports = function(grunt) {
   var webApp = require("./webapp.js")(grunt);
   var nativeApp = require("./nativeapp.js")(grunt);
   var _ = grunt.util._;
-  var gruntTizenInitialized = false;
 
   var tasks = {
     clean: function() {
@@ -50,22 +49,11 @@ module.exports = function(grunt) {
     },
 
     start: function() {
-      var action = grunt.option("debug") ? "debug" : "start";
-      grunt.config.set("tizen." + action, {
-        action: action,
-        localPort: 9090,
-        stopOnFailure: true
-      });
-      gruntTizenTask(action);
+      return getAppTypeSpecificTasks().start();
     },
 
     stop: function() {
-      function waitForStop() {
-        return util.execUntilTrue(function() {
-          return shell.isWidgetStopped(getConfig().fullAppId);
-        });
-      }
-      return shell.sdbKill(getConfig().fullAppId).then(waitForStop);
+      return getAppTypeSpecificTasks().stop();
     },
 
     restart: function() {
@@ -73,16 +61,8 @@ module.exports = function(grunt) {
     },
 
     sign: function() {
-      var config = getConfig();
-      util.removeDsStoreFiles(getConfig().buildPath);
-
-      if (!config.profilePath || config.profilePath.length === 0)
-        grunt.fail.warn("profilePath must be specified.");
-
-      return getSigningProfileName(config.profilePath).then(function(profileName) {
-        grunt.log.writeln("Signing " + config.buildPath + " using profile '" + profileName + "'");
-        return shell.sign(profileName, getConfig().profilePath, getConfig().buildPath);
-      });
+      var app = getAppTypeSpecificTasks();
+      return app.sign();
     },
 
     package: function() {
@@ -91,11 +71,11 @@ module.exports = function(grunt) {
     },
 
     install: function() {
-      return shell.installWidget(getWgtName());
+      return getAppTypeSpecificTasks().install();
     },
 
     uninstall: function() {
-      return shell.uninstallWidget(getConfig().fullAppId).then(grunt.log.writeln);
+      return getAppTypeSpecificTasks().uninstall();
     },
 
     watch: function() {
@@ -235,26 +215,6 @@ module.exports = function(grunt) {
       return deferred.promise;
   }
 
-  function initGruntTizen() {
-    if (!gruntTizenInitialized) {
-      gruntTizenInitialized = true;
-      grunt.task.run("tizen_prepare");
-    }
-  }
-
-  function gruntTizenTask(action) {
-    initGruntTizen();
-    grunt.task.run("tizen:"+action);
-  }
-
-  function removeWgtFile() {
-    var wgtFile = getWgtName();
-    if (grunt.file.isFile(wgtFile)) {
-      grunt.log.writeln("Removing old widget: " + wgtFile);
-      fs.unlink(wgtFile);
-    }
-  }
-
   function setupWatcher() {
     var filesBeforeChange = null;
 
@@ -358,29 +318,6 @@ module.exports = function(grunt) {
     return deferred.promise;
   }
 
-  function getSigningProfileName(profilesXmlPath) {
-    var deferred = Q.defer();
-    var parse = require('xml2js').parseString;
-    var profileName = getConfig().profile;
-    
-    if (profileName) {
-      deferred.resolve(profileName);
-    } else {
-      parse(grunt.file.read(profilesXmlPath), {attrkey: "attr"}, function(err, result) {
-        if (err)
-          deferred.reject("Can't parse " + profilesXmlPath);
-        else {
-          try {
-            deferred.resolve(_.first(result.profiles.profile).attr.name);
-          } catch (e) {
-            deferred.reject("Can't find profile in " + profilesXmlPath);
-          }
-        }
-      });
-    }
-    return deferred.promise;
-  }
-
   function getAppType(rootPath) {
     if (util.existingPath(rootPath, "config.xml")) {
       return "WEB"
@@ -415,11 +352,6 @@ module.exports = function(grunt) {
 
   function excludeBuildFolderFilter(config) {
     return "!" + path.join(path.relative(config.sourceDir, config.buildPath), "/**");
-  }
-
-  function getWgtName() {
-    var parts = getConfig().fullAppId.split(".");
-    return path.join(getConfig().sourceDir, parts[1] + ".wgt");
   }
 
   setupWatcher();

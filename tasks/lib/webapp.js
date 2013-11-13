@@ -1,5 +1,6 @@
 var path = require("path");
 var fs = require("fs");
+var Q = require("Q");
 
 module.exports = function (grunt) {
   "use strict";
@@ -8,6 +9,8 @@ module.exports = function (grunt) {
   var util = require("./util.js")(grunt);
   var shell = require("./shell.js")(grunt);
   var nativeApp = require("./nativeApp.js")(grunt);
+  var gruntTizenInitialized = false;
+
 
   function getConfig() {
     return grunt.config("tizendev");
@@ -22,6 +25,46 @@ module.exports = function (grunt) {
     package: function () {
       removeWgtFile();
       return shell.package(getWgtName(), getConfig().buildPath);
+    },
+
+    sign: function () {
+      var config = getConfig();
+      util.removeDsStoreFiles(getConfig().buildPath);
+
+      if (!config.profilePath || config.profilePath.length === 0)
+        grunt.fail.warn("profilePath must be specified.");
+
+      return util.getSigningProfileName(config.profilePath, config.profile).then(function (profileName) {
+        grunt.log.writeln("Signing " + config.buildPath + " using profile '" + profileName + "'");
+        return shell.sign(profileName, getConfig().profilePath, getConfig().buildPath);
+      });
+    },
+
+    install: function() {
+      return shell.installWidget(getWgtName());
+    },
+
+    uninstall: function() {
+      return shell.uninstallWidget(getConfig().fullAppId).then(grunt.log.writeln);
+    },
+
+    start: function() {
+      var action = grunt.option("debug") ? "debug" : "start";
+      grunt.config.set("tizen." + action, {
+        action: action,
+        localPort: 9090,
+        stopOnFailure: true
+      });
+      gruntTizenTask(action);
+    },
+
+    stop: function() {
+      function waitForStop() {
+        return util.execUntilTrue(function() {
+          return shell.isWidgetStopped(getConfig().fullAppId);
+        });
+      }
+      return shell.sdbKill(getConfig().fullAppId).then(waitForStop);
     }
 
   };
@@ -79,6 +122,40 @@ module.exports = function (grunt) {
   function getWgtName() {
     var parts = getConfig().fullAppId.split(".");
     return path.join(getConfig().sourceDir, parts[1] + ".wgt");
+  }
+
+  function initGruntTizen() {
+    if (!gruntTizenInitialized) {
+      gruntTizenInitialized = true;
+      grunt.task.run("tizen_prepare");
+    }
+  }
+
+  function gruntTizenTask(action) {
+    initGruntTizen();
+    grunt.task.run("tizen:"+action);
+  }
+
+  function isCopyMatch(filepath) {
+    var sourceRelativePath = path.relative(getConfig().sourceDir, filepath);
+    var filter = _.flatten([getConfig().copy, getConfig().copyExclude]);
+    return grunt.file.match(filter, sourceRelativePath).length > 0;
+  }
+
+  function executeTasks(filepath) {
+    var sourceRelativePath = path.relative(getConfig().sourceDir, filepath);
+    var tasks = getConfig().tasks;
+    for (var taskName in tasks) {
+      if (grunt.file.match(tasks[taskName], sourceRelativePath).length > 0)
+        grunt.task.run(taskName);
+    }
+  }
+
+  function copySrcFileToBuild(sourcePath) {
+    var sourceFileRelativePath = path.relative(getConfig().sourceDir, sourcePath);
+    var targetPath = path.join(getConfig().buildPath, sourceFileRelativePath);
+    grunt.file.copy(sourcePath, targetPath);
+    grunt.log.writeln("Copied " + sourcePath + " to " + targetPath);
   }
 
   return webApp;

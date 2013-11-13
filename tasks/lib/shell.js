@@ -126,6 +126,43 @@ module.exports = function(grunt) {
         ["-p", "-n", wgtName, buildPath]).then(grunt.log.writeln);
     },
 
+    nativePackage: function(authorKeyPath, authorKeyPassword, buildPath) {
+        if(!util.existingPath(buildPath, "")){
+            grunt.fail.warn("Build folder should exist already. Run build task first.");
+        }
+        return shell.execVerbose(
+            getBinPath("native-packaging"),
+            ["-ak", authorKeyPath, "-ap", authorKeyPassword],
+            {cwd: buildPath})
+    },
+
+    nativeInstall: function(buildPath) {
+        var tpkFiles = grunt.file.expand(path.join(buildPath, "**.tpk"));
+        if(tpkFiles.length == 0){
+            grunt.fail.warn("*.tpk package doesn't exist in build folder. You have to package the application first");
+        }
+        var tpkPackagePath = _.first(tpkFiles);
+
+        return shell.execVerbose(
+            getBinPath("native-install"),
+            ["-p", tpkPackagePath],
+            {cwd: buildPath});
+    },
+
+    nativeUninstall: function(appId) {
+      return this.execSdbShell("pkgcmd -q -u -n " + appId);
+    },
+
+    nativeStart: function(appId) {
+        return shell.execVerbose(
+            getBinPath("native-run"),
+            ["-p", appId]);
+    },
+
+    nativeStop: function(appId) {
+        return this.execSdbShell("pkgcmd -k -n " + appId);
+    },
+
     isWidgetStopped: function(appId) {
       return shell.exec(
         "sdb",

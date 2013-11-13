@@ -42,6 +42,27 @@ module.exports = function (grunt) {
         var profileData = util.getProfileData(profileName, getConfig().profilePath, getConfig().libPath);
         return shell.nativePackage(profileData.authorKeyPath, profileData.authorKeyPassword, getConfig().buildPath);
       });
+    },
+
+    sign: function () {
+      console.log("Signing is done by packaging task when developing native application");
+      return util.resolvedPromise();
+    },
+
+    install: function () {
+      return shell.nativeInstall(getConfig().buildPath);
+    },
+
+    uninstall: function () {
+      return shell.nativeUninstall(getConfig().fullAppId);
+    },
+
+    start: function () {
+      return shell.nativeStart(getConfig().fullAppId);
+    },
+
+    stop: function () {
+      return shell.nativeStop(getConfig().fullAppId);
     }
 
   };
