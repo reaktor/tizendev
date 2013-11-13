@@ -147,10 +147,14 @@ module.exports = function(grunt) {
         }
         var tpkPackagePath = _.first(tpkFiles);
 
-        return shell.execVerbose(
-            getBinPath("native-install"),
-            ["-p", tpkPackagePath],
-            {cwd: buildPath});
+        return shell.execSdb(["root", "on"])
+            .then(function() {
+              return shell.execVerbose(
+
+                  getBinPath("native-install"),
+                  ["-p", tpkPackagePath],
+                  {cwd: buildPath})
+            });
     },
 
     nativeUninstall: function(appId) {
