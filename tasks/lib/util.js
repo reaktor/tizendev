@@ -4,7 +4,7 @@ var path = require("path");
 var http = require("http");
 var url = require("url");
 var java = require("java");
-var libxmljs = require("libxmljs");
+var ET = require("elementtree");
 
 module.exports = function(grunt) {
   "use strict";
@@ -229,20 +229,21 @@ module.exports = function(grunt) {
   return util;
 
   function parseProfileData(profileName, xml, libPath){
-      var xmlDoc = libxmljs.parseXmlString(xml);
-      var profile = xmlDoc.get("/profiles/profile[@name='" + profileName + "'][1]");
-      var authorItem = profile.get("//profileitem[@distributor='0'][1]");
-      var distributorItem = profile.get("//profileitem[@distributor='2'][1]");
+     var xmlDoc = ET.parse(xml);
+
+      var profile = xmlDoc.getroot().find("./profile[@name='" + profileName + "']");
+      var authorItem = profile.find("./profileitem[@distributor='0']");
+      var distributorItem = profile.find("./profileitem[@distributor='2']");
 
       grunt.log.writeln("The log4j error message below doesn't effect the functionality of decrypting the password." +
           " We should figure a way to get rid of the message");
       return {
-          authorKeyPassword : decryptProfilePassword(authorItem.attr("password").value(), libPath),
-          authorKeyPath: authorItem.attr("key").value(),
-          distributorPassword: decryptProfilePassword(distributorItem.attr("password").value(), libPath),
-          distributorKeyPath: distributorItem.attr("key").value(),
-          distributorCAPath: distributorItem.attr("ca").value(),
-          distributorRootCertificatePath: distributorItem.attr("rootca").value()
+          authorKeyPassword : decryptProfilePassword(authorItem.attrib.password, libPath),
+          authorKeyPath: authorItem.attrib.key,
+          distributorPassword: decryptProfilePassword(distributorItem.attrib.password, libPath),
+          distributorKeyPath: distributorItem.attrib.key,
+          distributorCAPath: distributorItem.attrib.ca,
+          distributorRootCertificatePath: distributorItem.attrib.rootca
       };
   }
 
@@ -280,10 +281,8 @@ module.exports = function(grunt) {
 
   function getNativeAppId(manifestXmlPath) {
       var manifestXml = grunt.file.read(manifestXmlPath);
-      var xmlDoc = libxmljs.parseXmlString(manifestXml);
-      var nameSpaceUrl = xmlDoc.root().namespace().href();
-      var tizenNameSpace = {tizenNs : nameSpaceUrl};
-      var appId = xmlDoc.get("/tizenNs:Manifest/tizenNs:Id", tizenNameSpace).text();
+      var xml = ET.parse(manifestXml);
+      var appId =  xml.getroot().find("./Id").text;
       if(!appId){
           grunt.fail.warn("application id not found in manifest.xml");
       }
