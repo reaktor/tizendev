@@ -35,8 +35,11 @@ module.exports = function (grunt) {
       }
       return util.getSigningProfileName(config.profilePath, config.profile).then(function (profileName) {
 
-        var profileData = util.getProfileData(profileName, getConfig().profilePath, getConfig().libPath);
-        return shell.nativePackage(profileData ,getConfig().buildPath);
+        return shell.getProfileData(profileName, getConfig().profilePath, getConfig().libPath)
+            .then(function(profileData) {
+              return shell.nativePackage(profileData ,getConfig().buildPath);
+            });
+
       });
     },
 

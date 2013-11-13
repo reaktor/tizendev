@@ -3,7 +3,6 @@ var fs = require("fs");
 var path = require("path");
 var http = require("http");
 var url = require("url");
-var java = require("java");
 var ET = require("elementtree");
 
 module.exports = function(grunt) {
@@ -140,11 +139,6 @@ module.exports = function(grunt) {
         }
     },
 
-    getProfileData: function(profileName, profileXmlPath, libPath) {
-        var profileXml = grunt.file.read(profileXmlPath);
-        return parseProfileData(profileName, profileXml, libPath)
-    },
-
     getSigningProfileName: function (profilesXmlPath, profileName) {
       var deferred = Q.defer();
       var parse = require('xml2js').parseString;
@@ -227,43 +221,6 @@ module.exports = function(grunt) {
   };
 
   return util;
-
-  function parseProfileData(profileName, xml, libPath){
-     var xmlDoc = ET.parse(xml);
-
-      var profile = xmlDoc.getroot().find("./profile[@name='" + profileName + "']");
-      var authorItem = profile.find("./profileitem[@distributor='0']");
-      var distributorItem = profile.find("./profileitem[@distributor='2']");
-
-      grunt.log.writeln("The log4j error message below doesn't effect the functionality of decrypting the password." +
-          " We should figure a way to get rid of the message");
-      return {
-          authorKeyPassword : decryptProfilePassword(authorItem.attrib.password, libPath),
-          authorKeyPath: authorItem.attrib.key,
-          distributorPassword: decryptProfilePassword(distributorItem.attrib.password, libPath),
-          distributorKeyPath: distributorItem.attrib.key,
-          distributorCAPath: distributorItem.attrib.ca,
-          distributorRootCertificatePath: distributorItem.attrib.rootca
-      };
-  }
-
-
-  function decryptProfilePassword(password, libPath){
-      var files = fs.readdirSync(libPath);
-      var javaLibs = _.filter(files, function(fileName){
-          return fileName.slice(-4) == ".jar"
-      });
-      _.each(javaLibs, function(jar){
-          var filePath = path.join(libPath, jar);
-          java.classpath.push(filePath);
-
-      });
-
-      var decryptedPassword = java.callStaticMethodSync("org.tizen.common.util.CipherUtil", "getDecryptedString", password);
-      return decryptedPassword;
-  }
-
-
 
   function getWebAppId(configXmlPath) {
       var configXml = grunt.file.read(configXmlPath);

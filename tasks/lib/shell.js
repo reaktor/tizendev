@@ -3,6 +3,7 @@ var path = require("path");
 var Bacon = require("baconjs");
 var spawn = require('child_process').spawn;
 var fs = require('fs');
+var ET = require("elementtree");
 
 module.exports = function(grunt) {
   "use strict";
@@ -171,6 +172,11 @@ module.exports = function(grunt) {
         return this.execSdbShell("pkgcmd -k -n " + appId);
     },
 
+    getProfileData: function(profileName, profileXmlPath, libPath) {
+      var profileXml = grunt.file.read(profileXmlPath);
+      return parseProfileData(profileName, profileXml, libPath)
+    },
+
     isWidgetStopped: function(appId) {
       return shell.exec(
         "sdb",
@@ -284,4 +290,38 @@ module.exports = function(grunt) {
   };
 
   return shell;
+
+  function parseProfileData(profileName, xml, libPath){
+    var xmlDoc = ET.parse(xml);
+
+    var profile = xmlDoc.getroot().find("./profile[@name='" + profileName + "']");
+    var authorItem = profile.find("./profileitem[@distributor='0']");
+    var distributorItem = profile.find("./profileitem[@distributor='2']");
+
+    grunt.log.writeln("The log4j error message below doesn't effect the functionality of decrypting the password." +
+        " We should figure a way to get rid of the message");
+    var authorKeyPassword = decryptProfilePassword(authorItem.attrib.password, libPath);
+    var distributorKeyPassword = decryptProfilePassword(distributorItem.attrib.password, libPath);
+
+    return Q.all([authorKeyPassword, distributorKeyPassword])
+        .then(function(resolved) {
+          var authPass = _.first(resolved[0].split("\n"));
+          var distPass = _.first(resolved[1].split("\n"));
+          return Q({
+            authorKeyPassword : authPass,
+            authorKeyPath: authorItem.attrib.key,
+            distributorPassword: distPass,
+            distributorKeyPath: distributorItem.attrib.key,
+            distributorCAPath: distributorItem.attrib.ca,
+            distributorRootCertificatePath: distributorItem.attrib.rootca
+          });
+        });
+  }
+
+
+  function decryptProfilePassword(password, libPath){
+    return  shell.execVerbose("java",
+     ["-cp", ("./tasks/lib/java:" + libPath + '*'), "Decrypter", password ], {stdio: "pipe" });
+
+  }
 };
