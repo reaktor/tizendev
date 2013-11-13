@@ -226,13 +226,17 @@ module.exports = function(grunt) {
       var xmlDoc = libxmljs.parseXmlString(xml);
       var profile = xmlDoc.get("/profiles/profile[@name='" + profileName + "'][1]");
       var authorItem = profile.get("//profileitem[@distributor='0'][1]");
-      var distributorItem = profile.get("//profileitem[@distributor='1'][1]");
+      var distributorItem = profile.get("//profileitem[@distributor='2'][1]");
 
+      grunt.log.writeln("The log4j error message below doesn't effect the functionality of decrypting the password." +
+          " We should figure a way to get rid of the message");
       return {
           authorKeyPassword : decryptProfilePassword(authorItem.attr("password").value(), libPath),
           authorKeyPath: authorItem.attr("key").value(),
           distributorPassword: decryptProfilePassword(distributorItem.attr("password").value(), libPath),
-          distributorKeyPath: distributorItem.attr("key").value()
+          distributorKeyPath: distributorItem.attr("key").value(),
+          distributorCAPath: distributorItem.attr("ca").value(),
+          distributorRootCertificatePath: distributorItem.attr("rootca").value()
       };
   }
 

@@ -126,13 +126,17 @@ module.exports = function(grunt) {
         ["-p", "-n", wgtName, buildPath]).then(grunt.log.writeln);
     },
 
-    nativePackage: function(authorKeyPath, authorKeyPassword, buildPath) {
+    nativePackage: function(profileData, buildPath) {
         if(!util.existingPath(buildPath, "")){
             grunt.fail.warn("Build folder should exist already. Run build task first.");
         }
         return shell.execVerbose(
             getBinPath("native-packaging"),
-            ["-ak", authorKeyPath, "-ap", authorKeyPassword],
+            ["-ak", profileData.authorKeyPath, "-ap", profileData.authorKeyPassword,
+            "-dc", profileData.distributorCAPath,
+            "-dk", profileData.distributorKeyPath,
+            "-dp", profileData.distributorPassword,
+            "-dr", profileData.distributorRootCertificatePath],
             {cwd: buildPath})
     },
 
