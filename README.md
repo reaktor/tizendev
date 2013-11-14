@@ -30,7 +30,8 @@ There are two ways to use the plugin:
 
 * *Local install*. The plugin is installed as a Grunt plugin to the project. Project-specific settings, such as complex Grunt tasks, can be specified. 
 
-
+**Note that the native application support is highly experimental and it's entirely possible that it won't work on your application.
+Be Warned!**
 
 ### "Global" install
 
