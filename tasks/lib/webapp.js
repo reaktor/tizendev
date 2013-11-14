@@ -1,6 +1,6 @@
 var path = require("path");
 var fs = require("fs");
-var Q = require("Q");
+var Q = require("q");
 
 module.exports = function (grunt) {
   "use strict";
