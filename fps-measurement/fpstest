@@ -159,12 +159,7 @@ run_xmacro() {
 }
 start_fps_log() {
   echo "Starting FPS measurement"
-  initialize_fps_log_file
-}
-initialize_fps_log_file() {
   run_cmd_on_target "true > '$FPSLOG_FILE'" # truncate
-  run_cmd_on_target "chown app: $FPSLOG_FILE"
-  run_cmd_on_target "chmod 644 $FPSLOG_FILE"
 }
 
 kill_application() {
@@ -181,7 +176,7 @@ launch_application_and_grab_stdout() {
   redirect_fps_output_to_file
 }
 redirect_fps_output_to_file() {
-  initialize_fps_log_file
+  rm -f $FPSLOG_FILE
 
   GDB_SCRIPT_PATH="/tmp/redirect_stdout_to_file.gdb"
   create_gdb_script "$GDB_SCRIPT_PATH"
